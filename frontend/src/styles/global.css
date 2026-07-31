@@ -1,0 +1,105 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 280px;
+  background: var(--colour-background);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-width: 280px;
+  min-height: 100vh;
+  margin: 0;
+  color: var(--colour-text);
+  background: var(--colour-background);
+  font-family: "Noto Sans Khmer", "Khmer OS System", "Segoe UI", Arial, sans-serif;
+  font-size: var(--font-size-base);
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button,
+a,
+label {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--colour-focus);
+  outline-offset: 3px;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.page-shell {
+  width: min(100%, 1100px);
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+
+.app {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  background-color: var(--colour-background);
+  background-image:
+    linear-gradient(rgb(245 247 250 / 95%), rgb(245 247 250 / 95%)),
+    url("/images/figma-background.png");
+  background-position: top left;
+  background-size: auto, 200px 233.5px;
+}
+
+.main-content {
+  flex: 1;
+  padding-block: 32px 72px;
+}
+
+@media (max-width: 600px) {
+  .page-shell {
+    padding-inline: 16px;
+  }
+
+  .main-content {
+    padding-block: 24px 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+

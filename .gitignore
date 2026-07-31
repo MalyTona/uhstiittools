@@ -1,0 +1,23 @@
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+backend/.venv/
+
+# Environment and generated documents
+.env
+*.pdf
+!frontend/public/images/README.md
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
