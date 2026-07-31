@@ -102,9 +102,6 @@ def merge():
         )
         response.headers["X-Merged-File-Count"] = str(len(validated))
         response.headers["X-Merged-Page-Count"] = str(page_count)
-        response.headers["Access-Control-Expose-Headers"] = (
-            "Content-Disposition, X-Merged-File-Count, X-Merged-Page-Count"
-        )
         response.call_on_close(output.close)
         logger.info("Merged %s PDF files into %s pages", len(validated), page_count)
         return response
@@ -133,9 +130,6 @@ def split():
             max_age=0,
         )
         response.headers["X-Split-Page-Count"] = str(len(pages))
-        response.headers["Access-Control-Expose-Headers"] = (
-            "Content-Type, X-Split-Page-Count"
-        )
         response.call_on_close(output.close)
         logger.info("Split a PDF into %s pages", len(pages))
         return response

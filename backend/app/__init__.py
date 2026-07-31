@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from flask import Flask
+from flask import Flask, request
 
 from .config import Config
 from .error_handlers import register_error_handlers
@@ -41,6 +41,17 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
             "img-src 'self' data:; connect-src 'self'; object-src 'none'; "
             "base-uri 'self'; frame-ancestors 'self'; form-action 'self'"
         )
+        origin = request.headers.get("Origin")
+        allowed_origins = app.config["CORS_ALLOWED_ORIGINS"]
+        if origin and origin in allowed_origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+            response.headers["Access-Control-Expose-Headers"] = (
+                "Content-Disposition, X-Merged-File-Count, "
+                "X-Merged-Page-Count, X-Split-Page-Count"
+            )
+            response.vary.add("Origin")
         return response
 
     return app

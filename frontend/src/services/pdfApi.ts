@@ -16,6 +16,11 @@ export class PdfApiError extends Error implements ApiError {
   }
 }
 
+function apiUrl(path: `/api/${string}`): string {
+  const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
+  return baseUrl ? `${baseUrl}${path}` : path;
+}
+
 interface ErrorEnvelope {
   ok: false;
   error: ApiError;
@@ -124,7 +129,7 @@ export async function getPdfInfo(file: File): Promise<PdfInfo> {
   formData.append("file", file);
   let response: Response;
   try {
-    response = await fetch("/api/pdf-info", { method: "POST", body: formData });
+    response = await fetch(apiUrl("/api/pdf-info"), { method: "POST", body: formData });
   } catch {
     throw new PdfApiError("NETWORK_ERROR", "The server could not be reached.");
   }
@@ -156,7 +161,7 @@ export async function mergePdfFiles(
 
   let response: Response;
   try {
-    response = await fetch("/api/merge", { method: "POST", body: formData });
+    response = await fetch(apiUrl("/api/merge"), { method: "POST", body: formData });
   } catch {
     throw new PdfApiError("NETWORK_ERROR", "The server could not be reached.");
   }
@@ -178,7 +183,7 @@ export async function splitPdfFile(file: File, outputFilename: string): Promise<
 
   let response: Response;
   try {
-    response = await fetch("/api/split", { method: "POST", body: formData });
+    response = await fetch(apiUrl("/api/split"), { method: "POST", body: formData });
   } catch {
     throw new PdfApiError("NETWORK_ERROR", "The server could not be reached.");
   }

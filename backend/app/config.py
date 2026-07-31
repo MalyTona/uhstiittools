@@ -18,6 +18,16 @@ def _positive_int(name: str, default: int) -> int:
     return value
 
 
+def _origins(name: str) -> tuple[str, ...]:
+    """Return a normalized, comma-separated origin allowlist."""
+
+    return tuple(
+        origin.strip().rstrip("/")
+        for origin in os.getenv(name, "").split(",")
+        if origin.strip()
+    )
+
+
 class Config:
     """Safe defaults for local and production deployments."""
 
@@ -27,5 +37,5 @@ class Config:
     MAX_TOTAL_SIZE = _positive_int("MAX_TOTAL_SIZE", 200 * 1024 * 1024)
     # Leave room for multipart boundaries while still enforcing exact PDF limits.
     MAX_CONTENT_LENGTH = MAX_TOTAL_SIZE + 1024 * 1024
+    CORS_ALLOWED_ORIGINS = _origins("CORS_ALLOWED_ORIGINS")
     TESTING = False
-

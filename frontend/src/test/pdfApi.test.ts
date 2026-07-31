@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { mergePdfFiles, splitPdfFile } from "../services/pdfApi";
+import { getPdfInfo, mergePdfFiles, splitPdfFile } from "../services/pdfApi";
 import type { SelectedPdfFile } from "../types/pdf";
 
 function selected(name: string): SelectedPdfFile {
@@ -37,6 +37,30 @@ function multipartResponse(filenames: string[]): Response {
 }
 
 describe("pdfApi", () => {
+  it("uses the configured production API origin without a trailing slash", async () => {
+    vi.stubEnv("VITE_API_BASE_URL", "https://uhstiit-pdf-api.onrender.com/");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe("https://uhstiit-pdf-api.onrender.com/api/pdf-info");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ok: true,
+          file: { name: "notes.pdf", size: 3, pages: 1, encrypted: false },
+        }),
+        headers: new Headers(),
+      } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getPdfInfo(
+      new File(["pdf"], "notes.pdf", { type: "application/pdf" }),
+    );
+
+    expect(result.pages).toBe(1);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("constructs repeated files fields in exact array order", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const form = init?.body as FormData;

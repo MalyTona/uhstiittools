@@ -30,6 +30,32 @@ def test_health_and_security_headers(client):
     assert "default-src 'self'" in response.headers["Content-Security-Policy"]
 
 
+def test_cors_allows_only_configured_frontend_origin():
+    frontend_origin = "https://uhstiit-pdf-tools.vercel.app"
+    app = create_app(
+        {"TESTING": True, "CORS_ALLOWED_ORIGINS": (frontend_origin,)}
+    )
+    with app.test_client() as test_client:
+        allowed = test_client.get("/health", headers={"Origin": frontend_origin})
+        preflight = test_client.options(
+            "/api/merge",
+            headers={
+                "Origin": frontend_origin,
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        rejected = test_client.get(
+            "/health", headers={"Origin": "https://untrusted.example"}
+        )
+
+    assert allowed.headers["Access-Control-Allow-Origin"] == frontend_origin
+    assert "Origin" in allowed.headers["Vary"]
+    assert "X-Merged-Page-Count" in allowed.headers["Access-Control-Expose-Headers"]
+    assert preflight.status_code == 200
+    assert "POST" in preflight.headers["Access-Control-Allow-Methods"]
+    assert "Access-Control-Allow-Origin" not in rejected.headers
+
+
 def test_production_spa_and_assets_are_served(tmp_path):
     dist = tmp_path / "dist"
     assets = dist / "assets"

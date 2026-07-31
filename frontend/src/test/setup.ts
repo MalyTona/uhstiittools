@@ -43,4 +43,5 @@ afterEach(() => {
   }
   vi.clearAllMocks();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
