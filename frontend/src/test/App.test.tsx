@@ -59,6 +59,37 @@ function splitResponse(filenameBase = "split-page", pages = 3): Response {
   } as Response;
 }
 
+function imageResponse(filenameBase = "converted", format = "webp", pages = 3): Response {
+  const boundary = "test-image-boundary";
+  const mimeType = format === "jpg" ? "image/jpeg" : `image/${format}`;
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  for (let page = 1; page <= pages; page += 1) {
+    const filename = `${filenameBase}-page-${String(page).padStart(3, "0")}.${format}`;
+    chunks.push(encoder.encode(
+      `--${boundary}\r\nContent-Type: ${mimeType}\r\nContent-Disposition: attachment; filename*=UTF-8''${encodeURIComponent(filename)}\r\nX-Page-Number: ${page}\r\n\r\n`,
+    ));
+    chunks.push(encoder.encode(`image-page-${page}`));
+    chunks.push(encoder.encode("\r\n"));
+  }
+  chunks.push(encoder.encode(`--${boundary}--\r\n`));
+  const body = new Uint8Array(chunks.reduce((size, chunk) => size + chunk.length, 0));
+  let offset = 0;
+  chunks.forEach((chunk) => {
+    body.set(chunk, offset);
+    offset += chunk.length;
+  });
+  return {
+    ok: true,
+    status: 200,
+    arrayBuffer: async () => body.buffer,
+    headers: new Headers({
+      "Content-Type": `multipart/mixed; boundary=${boundary}`,
+      "X-Converted-Page-Count": String(pages),
+    }),
+  } as Response;
+}
+
 function successfulFetch() {
   return vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async (input) => {
     if (String(input) === "/api/pdf-info") {
@@ -311,7 +342,7 @@ describe("PDF merge application", () => {
   });
 
   it("keeps the source selected when splitting returns a structured error", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       if (String(input) === "/api/pdf-info") {
         return jsonResponse({
           ok: true,
@@ -347,5 +378,50 @@ describe("PDF merge application", () => {
     expect(screen.getByRole("heading", { name: /^បំបែកឯកសារ PDF/ })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "បំបែក PDF" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByLabelText("ជ្រើសឯកសារ PDF មួយដើម្បីបំបែក")).toBeInTheDocument();
+  });
+
+  it("converts one PDF to the selected image format and cleans result URLs", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      if (String(input) === "/api/pdf-info") {
+        return jsonResponse({
+          ok: true,
+          file: { name: "slides.pdf", size: 9, pages: 2, encrypted: false },
+        });
+      }
+      return imageResponse("lecture-images", "webp", 2);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup({ applyAccept: false });
+    render(<App />);
+
+    await user.click(screen.getByRole("tab", { name: "PDF to Image" }));
+    expect(screen.getByRole("heading", { name: /^Convert PDF to Images/ })).toBeInTheDocument();
+    const upload = screen.getByLabelText("Choose one PDF file to convert to images");
+    expect(upload).not.toHaveAttribute("multiple");
+    await user.upload(upload, pdf("slides.pdf"));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Convert to Images" })).toBeEnabled(),
+    );
+
+    await user.selectOptions(screen.getByLabelText("Image Format"), "webp");
+    const filename = screen.getByLabelText("Image Filename Base (Optional)");
+    await user.clear(filename);
+    await user.type(filename, "lecture-images");
+    await user.click(screen.getByRole("button", { name: "Convert to Images" }));
+
+    const convertCall = fetchMock.mock.calls.find(([url]) => String(url) === "/api/pdf-to-image");
+    const form = (convertCall?.[1] as RequestInit).body as FormData;
+    expect((form.get("file") as File).name).toBe("slides.pdf");
+    expect(form.get("output_filename")).toBe("lecture-images.webp");
+    expect(form.get("output_format")).toBe("webp");
+    const downloads = await screen.findAllByRole("link", { name: /Download page/ });
+    expect(downloads).toHaveLength(2);
+    expect(downloads[0]).toHaveAttribute("download", "lecture-images-page-001.webp");
+    expect(downloads[1]).toHaveAttribute("download", "lecture-images-page-002.webp");
+    expect(screen.getByText(/2 WEBP images are ready to download/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Convert Another PDF" }));
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("slides.pdf")).not.toBeInTheDocument();
   });
 });

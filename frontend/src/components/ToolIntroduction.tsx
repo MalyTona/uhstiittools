@@ -2,8 +2,14 @@ import type { Translate } from "../i18n";
 import type { PdfTool } from "../types/pdf";
 
 export function ToolIntroduction({ t, tool = "merge" }: { t: Translate; tool?: PdfTool }) {
-  const title = tool === "merge" ? t("title") : t("splitTitle");
-  const secondaryTitle = tool === "merge" ? t("titleSecondary") : t("splitTitleSecondary");
+  const title =
+    tool === "merge" ? t("title") : tool === "split" ? t("splitTitle") : t("convertTitle");
+  const secondaryTitle =
+    tool === "merge"
+      ? t("titleSecondary")
+      : tool === "split"
+        ? t("splitTitleSecondary")
+        : t("convertTitleSecondary");
   return (
     <section className="tool-introduction" aria-labelledby="tool-title">
       <h1 id="tool-title">

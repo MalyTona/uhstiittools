@@ -5,6 +5,7 @@ from email.policy import default
 from io import BytesIO
 
 import pytest
+from PIL import Image
 from pypdf import PdfReader
 
 from app import create_app
@@ -119,6 +120,105 @@ def test_split_returns_ordered_individual_page_pdfs(client):
         for part in parts
     ]
     assert widths == [111, 222, 333]
+
+
+@pytest.mark.parametrize(
+    ("output_format", "extension", "mime_type", "pillow_format"),
+    [
+        ("png", "png", "image/png", "PNG"),
+        ("jpg", "jpg", "image/jpeg", "JPEG"),
+        ("webp", "webp", "image/webp", "WEBP"),
+    ],
+)
+def test_pdf_to_image_returns_ordered_individual_images(
+    client, output_format: str, extension: str, mime_type: str, pillow_format: str
+):
+    response = client.post(
+        "/api/pdf-to-image",
+        data={
+            "file": (BytesIO(build_pdf([72, 144])), "source.pdf"),
+            "output_filename": "../../lecture:images.jpeg",
+            "output_format": output_format,
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    assert response.mimetype == "multipart/mixed"
+    assert response.headers["X-Converted-Page-Count"] == "2"
+    assert response.headers["X-Image-Format"] == output_format
+    mime_message = BytesParser(policy=default).parsebytes(
+        b"Content-Type: "
+        + response.headers["Content-Type"].encode("ascii")
+        + b"\r\nMIME-Version: 1.0\r\n\r\n"
+        + response.data
+    )
+    parts = list(mime_message.iter_parts())
+    assert [part.get_filename() for part in parts] == [
+        f"lecture-images-page-001.{extension}",
+        f"lecture-images-page-002.{extension}",
+    ]
+    assert [part.get_content_type() for part in parts] == [mime_type, mime_type]
+    assert [part["X-Page-Number"] for part in parts] == ["1", "2"]
+    images = [Image.open(BytesIO(part.get_payload(decode=True))) for part in parts]
+    try:
+        assert [image.format for image in images] == [pillow_format, pillow_format]
+        assert images[1].width == images[0].width * 2
+    finally:
+        for image in images:
+            image.close()
+
+
+def test_pdf_to_image_rejects_unsupported_format_before_rendering(client):
+    response = client.post(
+        "/api/pdf-to-image",
+        data={
+            "file": (BytesIO(build_pdf()), "source.pdf"),
+            "output_format": "svg",
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "INVALID_IMAGE_FORMAT"
+
+
+@pytest.mark.parametrize(
+    ("data", "name", "code"),
+    [
+        (b"", "empty.pdf", "EMPTY_FILE"),
+        (b"broken", "broken.pdf", "CORRUPTED_PDF"),
+        (build_pdf(), "wrong.txt", "INVALID_EXTENSION"),
+        (build_pdf(encrypted=True), "secret.pdf", "ENCRYPTED_PDF"),
+    ],
+)
+def test_pdf_to_image_returns_structured_validation_errors(
+    client, data: bytes, name: str, code: str
+):
+    response = client.post(
+        "/api/pdf-to-image",
+        data={"file": (BytesIO(data), name), "output_format": "png"},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code in (400, 413)
+    assert response.get_json()["error"]["code"] == code
+    assert "Traceback" not in response.get_data(as_text=True)
+
+
+def test_pdf_to_image_closes_validated_stream(client, monkeypatch):
+    import app.routes as routes
+
+    stream = BytesIO(build_pdf())
+
+    def fake_validate(upload, _limit):
+        return ValidatedPdf(stream, upload.filename or "file.pdf", len(stream.getvalue()), 1)
+
+    monkeypatch.setattr(routes, "validate_pdf", fake_validate)
+    response = client.post(
+        "/api/pdf-to-image",
+        data={"file": (BytesIO(b"source"), "source.pdf"), "output_format": "png"},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    assert stream.closed
 
 
 @pytest.mark.parametrize(

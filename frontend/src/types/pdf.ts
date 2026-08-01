@@ -1,5 +1,6 @@
 export type Language = "en" | "km";
-export type PdfTool = "merge" | "split";
+export type PdfTool = "merge" | "split" | "convert";
+export type ImageOutputFormat = "png" | "jpg" | "webp";
 
 export type PdfFileStatus = "validating" | "valid" | "invalid";
 
@@ -71,6 +72,35 @@ export interface SplitResult {
 }
 
 export interface SplitPageResult {
+  filename: string;
+  pageNumber: number;
+  downloadUrl: string;
+}
+
+export type ConvertStatus =
+  | "idle"
+  | "validating"
+  | "ready"
+  | "converting"
+  | "completed"
+  | "error";
+
+export interface ConvertDownload {
+  pages: ConvertedPageDownload[];
+}
+
+export interface ConvertedPageDownload {
+  blob: Blob;
+  filename: string;
+  pageNumber: number;
+}
+
+export interface ConvertResult {
+  pages: ConvertedPageResult[];
+  format: ImageOutputFormat;
+}
+
+export interface ConvertedPageResult {
   filename: string;
   pageNumber: number;
   downloadUrl: string;

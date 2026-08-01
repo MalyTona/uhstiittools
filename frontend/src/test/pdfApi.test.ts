@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { getPdfInfo, mergePdfFiles, splitPdfFile } from "../services/pdfApi";
+import { convertPdfToImages, getPdfInfo, mergePdfFiles, splitPdfFile } from "../services/pdfApi";
 import type { SelectedPdfFile } from "../types/pdf";
 
 function selected(name: string): SelectedPdfFile {
@@ -32,6 +32,35 @@ function multipartResponse(filenames: string[]): Response {
     headers: new Headers({
       "Content-Type": `multipart/mixed; boundary=${boundary}`,
       "X-Split-Page-Count": String(filenames.length),
+    }),
+  } as Response;
+}
+
+function imageMultipartResponse(filenames: string[], mimeType: string): Response {
+  const boundary = "test-image-boundary";
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  filenames.forEach((filename, index) => {
+    chunks.push(encoder.encode(
+      `--${boundary}\r\nContent-Type: ${mimeType}\r\nContent-Disposition: attachment; filename*=UTF-8''${encodeURIComponent(filename)}\r\nX-Page-Number: ${index + 1}\r\n\r\n`,
+    ));
+    chunks.push(encoder.encode(`image-page-${index + 1}`));
+    chunks.push(encoder.encode("\r\n"));
+  });
+  chunks.push(encoder.encode(`--${boundary}--\r\n`));
+  const body = new Uint8Array(chunks.reduce((size, chunk) => size + chunk.length, 0));
+  let offset = 0;
+  chunks.forEach((chunk) => {
+    body.set(chunk, offset);
+    offset += chunk.length;
+  });
+  return {
+    ok: true,
+    status: 200,
+    arrayBuffer: async () => body.buffer,
+    headers: new Headers({
+      "Content-Type": `multipart/mixed; boundary=${boundary}`,
+      "X-Converted-Page-Count": String(filenames.length),
     }),
   } as Response;
 }
@@ -113,5 +142,30 @@ describe("pdfApi", () => {
     expect(result.pages.map((page) => page.pageNumber)).toEqual([1, 2]);
     expect(result.pages.every((page) => page.blob.type === "application/pdf")).toBe(true);
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("constructs a PDF-to-image request and parses ordered WebP pages", async () => {
+    const source = new File(["source"], "lecture.pdf", { type: "application/pdf" });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe("/api/pdf-to-image");
+      const form = init?.body as FormData;
+      expect((form.get("file") as File).name).toBe("lecture.pdf");
+      expect(form.get("output_filename")).toBe("slides.webp");
+      expect(form.get("output_format")).toBe("webp");
+      return imageMultipartResponse(
+        ["slides-page-001.webp", "slides-page-002.webp"],
+        "image/webp",
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await convertPdfToImages(source, "slides.webp", "webp");
+
+    expect(result.pages.map((page) => page.filename)).toEqual([
+      "slides-page-001.webp",
+      "slides-page-002.webp",
+    ]);
+    expect(result.pages.map((page) => page.pageNumber)).toEqual([1, 2]);
+    expect(result.pages.every((page) => page.blob.type === "image/webp")).toBe(true);
   });
 });

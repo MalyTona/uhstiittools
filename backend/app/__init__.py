@@ -49,7 +49,8 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
             response.headers["Access-Control-Allow-Headers"] = "Content-Type"
             response.headers["Access-Control-Expose-Headers"] = (
                 "Content-Disposition, X-Merged-File-Count, "
-                "X-Merged-Page-Count, X-Split-Page-Count"
+                "X-Merged-Page-Count, X-Split-Page-Count, "
+                "X-Converted-Page-Count, X-Image-Format"
             )
             response.vary.add("Origin")
         return response

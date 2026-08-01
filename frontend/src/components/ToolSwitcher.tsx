@@ -32,6 +32,17 @@ export function ToolSwitcher({ activeTool, onChange, t }: ToolSwitcherProps) {
       >
         {t("splitTool")}
       </button>
+      <button
+        id="convert-tool-tab"
+        type="button"
+        role="tab"
+        aria-selected={activeTool === "convert"}
+        aria-controls="pdf-tools"
+        className={activeTool === "convert" ? "is-active" : ""}
+        onClick={() => onChange("convert")}
+      >
+        {t("convertTool")}
+      </button>
     </div>
   );
 }

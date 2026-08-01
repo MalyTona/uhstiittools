@@ -7,7 +7,7 @@ interface OutputSettingsProps {
   onChange: (value: string) => void;
   onBlur: () => void;
   t: Translate;
-  extension?: ".pdf";
+  extension?: ".pdf" | ".png" | ".jpg" | ".webp";
   label?: string;
   helper?: string;
 }
@@ -23,7 +23,9 @@ export function OutputSettings({
   label = t("outputLabel"),
   helper = t("outputHelper"),
 }: OutputSettingsProps) {
-  const stem = value.toLowerCase().endsWith(extension) ? value.slice(0, -4) : value;
+  const stem = value.toLowerCase().endsWith(extension)
+    ? value.slice(0, -extension.length)
+    : value;
   return (
     <div className="output-settings">
       <label htmlFor="output-filename">{label}</label>

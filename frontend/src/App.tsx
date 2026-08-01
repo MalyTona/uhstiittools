@@ -5,6 +5,7 @@ import { AppHeader } from "./components/AppHeader";
 import { ErrorAlert } from "./components/ErrorAlert";
 import { MergeResult } from "./components/MergeResult";
 import { OutputSettings } from "./components/OutputSettings";
+import { PdfToImageTool } from "./components/PdfToImageTool";
 import { ProcessingStatus } from "./components/ProcessingStatus";
 import { SelectedFiles } from "./components/SelectedFiles";
 import { SplitPdfTool } from "./components/SplitPdfTool";
@@ -99,8 +100,10 @@ export default function App() {
           <ErrorAlert error={error} t={t} />
           {result && <MergeResult result={result} onStartAnother={() => resetAll(false)} t={t} />}
         </section>
-        ) : (
+        ) : activeTool === "split" ? (
           <SplitPdfTool t={t} />
+        ) : (
+          <PdfToImageTool t={t} />
         )}
       </main>
       <AppFooter t={t} />

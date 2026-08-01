@@ -1,5 +1,7 @@
 import type {
   ApiError,
+  ConvertDownload,
+  ImageOutputFormat,
   MergeDownload,
   PdfInfo,
   SelectedPdfFile,
@@ -111,6 +113,66 @@ async function parseSplitPages(response: Response, fallbackFilename: string): Pr
   return { pages };
 }
 
+async function parseConvertedPages(
+  response: Response,
+  fallbackFilename: string,
+  outputFormat: ImageOutputFormat,
+): Promise<ConvertDownload> {
+  const boundary = multipartBoundary(response.headers.get("Content-Type") ?? "");
+  if (!boundary) throw new PdfApiError("CONVERT_FAILED", "The conversion response was invalid.");
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder("utf-8");
+  const opening = encoder.encode(`--${boundary}\r\n`);
+  const delimiter = encoder.encode(`\r\n--${boundary}`);
+  const headerEndMarker = encoder.encode("\r\n\r\n");
+  const nextPartMarker = encoder.encode("\r\n");
+  const closingMarker = encoder.encode("--");
+  if (!startsWithBytes(bytes, opening, 0)) {
+    throw new PdfApiError("CONVERT_FAILED", "The conversion response was invalid.");
+  }
+
+  const fallbackStem = fallbackFilename.replace(/\.(?:png|jpe?g|webp)$/i, "");
+  const fallbackMime = outputFormat === "jpg" ? "image/jpeg" : `image/${outputFormat}`;
+  const pages: ConvertDownload["pages"] = [];
+  let cursor = opening.length;
+
+  while (cursor < bytes.length) {
+    const headerEnd = findBytes(bytes, headerEndMarker, cursor);
+    if (headerEnd < 0) {
+      throw new PdfApiError("CONVERT_FAILED", "An image response was incomplete.");
+    }
+    const headers = decoder.decode(bytes.slice(cursor, headerEnd));
+    const dataStart = headerEnd + headerEndMarker.length;
+    const nextBoundary = findBytes(bytes, delimiter, dataStart);
+    if (nextBoundary < 0) {
+      throw new PdfApiError("CONVERT_FAILED", "An image response was incomplete.");
+    }
+
+    const pageNumber = Number(headers.match(/^X-Page-Number:\s*(\d+)\s*$/im)?.[1]) || pages.length + 1;
+    const mimeType = headers.match(/^Content-Type:\s*([^;\r\n]+)\s*$/im)?.[1] ?? fallbackMime;
+    const fallback = `${fallbackStem}-page-${String(pageNumber).padStart(3, "0")}.${outputFormat}`;
+    pages.push({
+      blob: new Blob([bytes.slice(dataStart, nextBoundary)], { type: mimeType }),
+      filename: partFilename(headers, fallback),
+      pageNumber,
+    });
+
+    const boundaryEnd = nextBoundary + delimiter.length;
+    if (startsWithBytes(bytes, closingMarker, boundaryEnd)) break;
+    if (!startsWithBytes(bytes, nextPartMarker, boundaryEnd)) {
+      throw new PdfApiError("CONVERT_FAILED", "The conversion response was invalid.");
+    }
+    cursor = boundaryEnd + nextPartMarker.length;
+  }
+
+  if (pages.length === 0) {
+    throw new PdfApiError("CONVERT_FAILED", "No converted images were returned.");
+  }
+  return { pages };
+}
+
 async function parseError(response: Response, fallbackCode: string): Promise<PdfApiError> {
   try {
     const body = (await response.json()) as ErrorEnvelope;
@@ -190,4 +252,25 @@ export async function splitPdfFile(file: File, outputFilename: string): Promise<
   if (!response.ok) throw await parseError(response, "SPLIT_FAILED");
 
   return parseSplitPages(response, outputFilename);
+}
+
+export async function convertPdfToImages(
+  file: File,
+  outputFilename: string,
+  outputFormat: ImageOutputFormat,
+): Promise<ConvertDownload> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("output_filename", outputFilename);
+  formData.append("output_format", outputFormat);
+
+  let response: Response;
+  try {
+    response = await fetch(apiUrl("/api/pdf-to-image"), { method: "POST", body: formData });
+  } catch {
+    throw new PdfApiError("NETWORK_ERROR", "The server could not be reached.");
+  }
+  if (!response.ok) throw await parseError(response, "CONVERT_FAILED");
+
+  return parseConvertedPages(response, outputFilename, outputFormat);
 }

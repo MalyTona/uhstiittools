@@ -1,6 +1,6 @@
 # UHST-IIT PDF Merge Tools
 
-A privacy-focused, bilingual web application for merging PDF documents in an exact user-controlled order and splitting a PDF into individual pages. It is developed for the Institute of Information Technology at the University of Heng Samrin Thbongkhmum.
+A privacy-focused, bilingual web application for merging PDF documents in an exact user-controlled order, splitting a PDF into individual pages, and converting PDF pages to PNG, JPEG, or WebP images. It is developed for the Institute of Information Technology at the University of Heng Samrin Thbongkhmum.
 
 The interface implements the approved UHST-IIT Figma design while preserving the workflow, accessibility, and security rules in `design.md`. Design tokens and presentation components remain separated from PDF processing and API behavior.
 
@@ -14,7 +14,7 @@ The interface implements the approved UHST-IIT Figma design while preserving the
 - Safely normalize custom output filenames
 - Download the merged PDF without quality loss or rasterization
 - Split one PDF into ordered, individually downloadable single-page PDFs
-- Keep all merge and split processing in memory or secure temporary streams
+- Keep all merge, split, and image-conversion processing in memory or secure temporary streams
 - English and Khmer interfaces with saved language preference
 - Responsive, keyboard-accessible workflow with live status and focus management
 - Structured, localized errors for damaged, protected, oversized, and invalid files
@@ -27,15 +27,16 @@ Browser
        ├─ POST /api/pdf-info
        ├─ POST /api/merge
        ├─ POST /api/split
+       ├─ POST /api/pdf-to-image
        └─ GET  /health
               └─ Flask + pypdf
 ```
 
-The ordered frontend array is the only merge-order source of truth. The merge API receives repeated `files` form fields in that same order. The split API receives one `file`, copies every page into its own PDF, and streams the results as binary multipart data so the browser can expose each page separately. Flask validates every input again before `pypdf` processes it in memory.
+The ordered frontend array is the only merge-order source of truth. The merge API receives repeated `files` form fields in that same order. The split API receives one `file`, copies every page into its own PDF, and streams the results as binary multipart data so the browser can expose each page separately. The PDF-to-image API receives one `file`, an `output_format` of `png`, `jpg`, or `webp`, and renders every page at 150 DPI with PDFium before returning ordered binary multipart images. Flask validates every input again before processing it in memory.
 
 ## Using the tools
 
-Start the backend and frontend using the commands below, open the Vite URL, and choose **Merge PDF** or **Split PDF** above the upload panel. Split PDF accepts one source file and displays a separate download for every page, with ordered names such as `split-page-001.pdf`.
+Start the backend and frontend using the commands below, open the Vite URL, and choose **Merge PDF**, **Split PDF**, or **PDF to Image** above the upload panel. Split PDF accepts one source file and displays a separate PDF download for every page. PDF to Image accepts one source file, lets you select PNG, JPEG, or WebP, and displays ordered image downloads such as `converted-page-001.png`.
 
 ## Privacy and security
 
@@ -165,7 +166,7 @@ The blueprint uses the `backend` root directory, installs `backend/requirements.
 1. Open the Render web service and add `CORS_ALLOWED_ORIGINS` under **Environment**.
 2. Set it to the exact Vercel origin from step 2, with no path or trailing slash, for example `https://uhstiit-pdf-tools.vercel.app`.
 3. Save the change and allow Render to redeploy.
-4. Open the Vercel site and verify PDF information, merge, and split downloads.
+4. Open the Vercel site and verify PDF information, merge, split, and image-conversion downloads.
 
 For multiple fixed frontend origins, use a comma-separated list. Avoid `*`: PDF responses expose download metadata and should only be readable by approved sites. Vercel preview URLs change per deployment, so production is the simplest origin to allow; add a specific stable preview alias only when needed.
 

@@ -10,9 +10,19 @@ from urllib.parse import quote
 
 from flask import Blueprint, current_app, jsonify, request, send_file, send_from_directory
 
-from .services.filename_service import sanitise_pdf_filename, sanitise_split_filename
+from .services.filename_service import (
+    sanitise_image_filename,
+    sanitise_pdf_filename,
+    sanitise_split_filename,
+)
 from .services.pdf_merger import merge_pdfs
 from .services.pdf_splitter import SplitPdfPage, split_pdf_pages
+from .services.pdf_to_image import (
+    IMAGE_FORMATS,
+    ConvertedImagePage,
+    convert_pdf_to_images,
+    validate_image_format,
+)
 from .services.pdf_validator import (
     PdfValidationError,
     ValidatedPdf,
@@ -34,6 +44,27 @@ def _serialise_pdf_parts(pages: list[SplitPdfPage], boundary: str) -> BytesIO:
         headers = (
             f"--{boundary}\r\n"
             "Content-Type: application/pdf\r\n"
+            f"Content-Disposition: attachment; filename*=UTF-8''{filename}\r\n"
+            f"X-Page-Number: {page.page_number}\r\n"
+            f"Content-Length: {len(page.data)}\r\n\r\n"
+        )
+        output.write(headers.encode("ascii"))
+        output.write(page.data)
+        output.write(b"\r\n")
+    output.write(f"--{boundary}--\r\n".encode("ascii"))
+    output.seek(0)
+    return output
+
+
+def _serialise_image_parts(pages: list[ConvertedImagePage], boundary: str) -> BytesIO:
+    """Serialise page images as a binary-safe multipart response stream."""
+
+    output = BytesIO()
+    for page in pages:
+        filename = quote(page.filename, safe="")
+        headers = (
+            f"--{boundary}\r\n"
+            f"Content-Type: {page.mime_type}\r\n"
             f"Content-Disposition: attachment; filename*=UTF-8''{filename}\r\n"
             f"X-Page-Number: {page.page_number}\r\n"
             f"Content-Length: {len(page.data)}\r\n\r\n"
@@ -132,6 +163,39 @@ def split():
         response.headers["X-Split-Page-Count"] = str(len(pages))
         response.call_on_close(output.close)
         logger.info("Split a PDF into %s pages", len(pages))
+        return response
+    finally:
+        validated.close()
+
+
+@api.post("/api/pdf-to-image")
+def pdf_to_image():
+    """Render one validated PDF into individually downloadable page images."""
+
+    upload = request.files.get("file")
+    if upload is None:
+        raise PdfValidationError("NO_FILES", "Please select a PDF file.")
+
+    image_format = validate_image_format(request.form.get("output_format"))
+    validated = validate_pdf(upload, current_app.config["MAX_FILE_SIZE"])
+    try:
+        output_filename = sanitise_image_filename(
+            request.form.get("output_filename"),
+            IMAGE_FORMATS[image_format].extension,
+        )
+        pages = convert_pdf_to_images(validated, output_filename, image_format)
+        boundary = f"uhst-iit-image-{token_hex(16)}"
+        output = _serialise_image_parts(pages, boundary)
+        response = send_file(
+            output,
+            mimetype=f"multipart/mixed; boundary={boundary}",
+            as_attachment=False,
+            max_age=0,
+        )
+        response.headers["X-Converted-Page-Count"] = str(len(pages))
+        response.headers["X-Image-Format"] = image_format
+        response.call_on_close(output.close)
+        logger.info("Converted a PDF into %s %s images", len(pages), image_format)
         return response
     finally:
         validated.close()
